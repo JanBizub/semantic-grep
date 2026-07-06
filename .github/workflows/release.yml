@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            rid: osx-arm64
+            artifact: segrep-osx-arm64
+          - os: macos-latest
+            rid: osx-x64
+            artifact: segrep-osx-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: segrep-linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
+            artifact: segrep-linux-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+          include-prerelease: true
+
+      - name: Publish
+        run: |
+          dotnet publish Segrep/Segrep.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained \
+            -p:PublishSingleFile=true \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            -o ./dist
+
+      - name: Rename binary
+        run: mv ./dist/Segrep ./${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Make binaries executable
+        run: chmod +x segrep-*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: segrep-*
+          generate_release_notes: true

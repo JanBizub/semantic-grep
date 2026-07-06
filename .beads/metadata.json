@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "semantic_grep",
+  "project_id": "70b95120-cb46-470f-91cb-558521672708"
+}
