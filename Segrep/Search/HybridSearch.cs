@@ -21,8 +21,41 @@ public sealed class HybridSearch(SemanticSearch semantic, FullTextSearch fullTex
             semanticTask.Result,
             ftsTask.Result,
             grepTask.Result);
-        
-        return fused.Take(topK).ToList();
+
+        return CapPerDocument(fused.ToList(), topK, maxPerDocument: 2);
+    }
+
+    // Keeps one document from monopolizing all top-k slots when several documents are
+    // relevant; skipped chunks are backfilled in fused order so single-document
+    // questions still fill top-k.
+    private static List<SearchResult> CapPerDocument(List<SearchResult> ordered, int topK, int maxPerDocument)
+    {
+        var counts = new Dictionary<string, int>();
+        var taken = new List<SearchResult>(topK);
+        var skipped = new List<SearchResult>();
+
+        foreach (var result in ordered)
+        {
+            if (taken.Count == topK) break;
+            counts.TryGetValue(result.FilePath, out var count);
+            if (count < maxPerDocument)
+            {
+                counts[result.FilePath] = count + 1;
+                taken.Add(result);
+            }
+            else
+            {
+                skipped.Add(result);
+            }
+        }
+
+        foreach (var result in skipped)
+        {
+            if (taken.Count == topK) break;
+            taken.Add(result);
+        }
+
+        return taken;
     }
 
     private static IEnumerable<SearchResult> Fuse(

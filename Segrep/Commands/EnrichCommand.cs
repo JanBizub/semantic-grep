@@ -4,7 +4,7 @@ using Spectre.Console.Cli;
 
 namespace Segrep.Commands;
 
-public sealed class EnrichCommand(HybridSearch hybridSearch, InterpreterService interpreter)
+public sealed class EnrichCommand(HybridSearch hybridSearch, SemanticSearch semanticSearch, InterpreterService interpreter)
     : AsyncCommand<EnrichCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -24,31 +24,39 @@ public sealed class EnrichCommand(HybridSearch hybridSearch, InterpreterService 
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var searchQuery = settings.Raw
-            ? settings.Prompt
-            : await interpreter.ExpandPromptAsync(settings.Prompt, cancellationToken);
+        var interpretation = settings.Raw
+            ? new PromptInterpretation(QueryIntent.Focused, settings.Prompt)
+            : await interpreter.InterpretPromptAsync(settings.Prompt, cancellationToken);
+        var corpusWide = interpretation.Intent == QueryIntent.CorpusWide;
 
-        var chunks = await hybridSearch.SearchAsync(searchQuery, topK: settings.TopK, cancellationToken: cancellationToken);
+        var chunks = corpusWide
+            ? await semanticSearch.SearchPerDocumentAsync(interpretation.ExpandedQuery, perDocTopK: 3, cancellationToken)
+            : await hybridSearch.SearchAsync(interpretation.ExpandedQuery, topK: settings.TopK, cancellationToken: cancellationToken);
 
         // Emit an augmented prompt to stdout, ready to pipe into another LLM call.
-        Console.Write(BuildAugmentedPrompt(settings.Prompt, chunks));
+        Console.Write(BuildAugmentedPrompt(settings.Prompt, chunks, corpusWide));
         return 0;
     }
 
-    private static string BuildAugmentedPrompt(string originalPrompt, IReadOnlyList<SearchResult> chunks)
+    private static string BuildAugmentedPrompt(string originalPrompt, IReadOnlyList<SearchResult> chunks, bool corpusWide)
     {
         if (chunks.Count == 0)
             return originalPrompt;
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("The following document excerpts are provided as context:");
-        sb.AppendLine();
-        foreach (var chunk in chunks)
+        if (corpusWide)
         {
-            var fileName = Path.GetFileName(chunk.FilePath);
-            sb.AppendLine($"[source: {fileName} #{chunk.ChunkIndex}]");
-            sb.AppendLine(chunk.ChunkText);
+            var documents = ContextFormatter.DocumentNames(chunks);
+            sb.AppendLine("The following excerpts cover every document indexed in the database, grouped per file.");
+            sb.AppendLine($"The database contains {documents.Count} documents: {string.Join(", ", documents)}");
             sb.AppendLine();
+            sb.Append(ContextFormatter.BuildGrouped(chunks));
+        }
+        else
+        {
+            sb.AppendLine("The following document excerpts are provided as context:");
+            sb.AppendLine();
+            sb.Append(ContextFormatter.BuildFlat(chunks));
         }
         sb.AppendLine("---");
         sb.AppendLine();

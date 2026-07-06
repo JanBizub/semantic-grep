@@ -5,7 +5,7 @@ using Spectre.Console.Cli;
 
 namespace Segrep.Commands;
 
-public sealed class AskCommand(HybridSearch hybridSearch, InterpreterService interpreter)
+public sealed class AskCommand(HybridSearch hybridSearch, SemanticSearch semanticSearch, InterpreterService interpreter)
     : AsyncCommand<AskCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -21,8 +21,15 @@ public sealed class AskCommand(HybridSearch hybridSearch, InterpreterService int
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var searchQuery = await interpreter.ExpandPromptAsync(settings.Prompt, cancellationToken);
-        var chunks = await hybridSearch.SearchAsync(searchQuery, topK: settings.TopK, cancellationToken: cancellationToken);
+        var interpretation = await interpreter.InterpretPromptAsync(settings.Prompt, cancellationToken);
+        var corpusWide = interpretation.Intent == QueryIntent.CorpusWide;
+
+        if (corpusWide)
+            AnsiConsole.MarkupLine("[grey]corpus-wide question — retrieving from every document[/]");
+
+        var chunks = corpusWide
+            ? await semanticSearch.SearchPerDocumentAsync(interpretation.ExpandedQuery, perDocTopK: 3, cancellationToken)
+            : await hybridSearch.SearchAsync(interpretation.ExpandedQuery, topK: settings.TopK, cancellationToken: cancellationToken);
 
         if (chunks.Count == 0)
         {
@@ -30,7 +37,9 @@ public sealed class AskCommand(HybridSearch hybridSearch, InterpreterService int
             return 0;
         }
 
-        var answer = await interpreter.ComposeAnswerAsync(settings.Prompt, chunks, cancellationToken);
+        var answer = corpusWide
+            ? await interpreter.ComposeCorpusAnswerAsync(settings.Prompt, chunks, cancellationToken)
+            : await interpreter.ComposeAnswerAsync(settings.Prompt, chunks, cancellationToken);
 
         var questionPanel = new Panel(new Markup($"[blue]{Markup.Escape(settings.Prompt)}[/]"))
             .Header("[bold blue]Question[/]")
