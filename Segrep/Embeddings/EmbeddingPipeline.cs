@@ -52,7 +52,7 @@ public sealed class EmbeddingPipeline(
         return results;
     }
 
-    public async Task IngestAsync(IReadOnlyList<Chunk> chunks, CancellationToken cancellationToken = default)
+    public async Task IngestAsync(IReadOnlyList<Chunk> chunks, IProgress<double>? progress = null, CancellationToken cancellationToken = default)
     {
         if (chunks.Count == 0)
             return;
@@ -60,12 +60,14 @@ public sealed class EmbeddingPipeline(
         var opts = modelOptions.Value;
         var texts = chunks.Select(c => c.Text).ToList();
         var embeddings = await embeddingService.EmbedAsync(texts, cancellationToken);
+        progress?.Report(0.5);
 
         // Group by file so we can delete stale entries per file in one pass.
         var byFile = chunks
             .Select((chunk, i) => (chunk, embedding: embeddings[i]))
             .GroupBy(x => x.chunk.FilePath);
 
+        var upserted = 0;
         foreach (var fileGroup in byFile)
         {
             var filePath = fileGroup.Key;
@@ -80,6 +82,8 @@ public sealed class EmbeddingPipeline(
             foreach (var (chunk, embedding) in items)
             {
                 await UpsertChunkAsync(connection, chunk, embedding.Vector.ToArray(), opts, cancellationToken);
+                upserted++;
+                progress?.Report(0.5 + 0.5 * upserted / chunks.Count);
             }
         }
     }
