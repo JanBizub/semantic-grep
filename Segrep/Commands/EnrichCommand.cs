@@ -8,6 +8,7 @@ public sealed class EnrichCommand(
     HybridSearch hybridSearch,
     SemanticSearch semanticSearch,
     TermSearch termSearch,
+    SubTaskExecutor subTaskExecutor,
     InterpreterService interpreter)
     : AsyncCommand<EnrichCommand.Settings>
 {
@@ -29,24 +30,60 @@ public sealed class EnrichCommand(
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var interpretation = settings.Raw
-            ? new PromptInterpretation(QueryIntent.Focused, settings.Prompt)
+            ? PromptInterpretation.Single(QueryIntent.Focused, settings.Prompt)
             : await interpreter.InterpretPromptAsync(settings.Prompt, cancellationToken);
-        if (interpretation.Intent == QueryIntent.ExactTerm)
-        {
-            var occurrences = await termSearch.FindAsync(interpretation.ExpandedQuery, cancellationToken);
-            Console.Write(BuildTermPrompt(settings.Prompt, interpretation.ExpandedQuery, occurrences));
-            return 0;
-        }
-
-        var corpusWide = interpretation.Intent == QueryIntent.CorpusWide;
-
-        var chunks = corpusWide
-            ? await semanticSearch.SearchPerDocumentAsync(interpretation.ExpandedQuery, perDocTopK: 3, cancellationToken)
-            : await hybridSearch.SearchAsync(interpretation.ExpandedQuery, topK: settings.TopK, cancellationToken: cancellationToken);
 
         // Emit an augmented prompt to stdout, ready to pipe into another LLM call.
-        Console.Write(BuildAugmentedPrompt(settings.Prompt, chunks, corpusWide));
+        var augmented = interpretation.Tasks.Count == 1
+            ? await BuildSingleAsync(settings, interpretation.Tasks[0], cancellationToken)
+            : await BuildCompoundAsync(settings, interpretation.Tasks, cancellationToken);
+        Console.Write(augmented);
         return 0;
+    }
+
+    private async Task<string> BuildSingleAsync(Settings settings, QueryTask task, CancellationToken cancellationToken)
+    {
+        if (task.Intent == QueryIntent.ExactTerm)
+        {
+            var occurrences = await termSearch.FindAsync(task.Query, task.DocumentFilter, cancellationToken);
+            return BuildTermPrompt(settings.Prompt, task.Query, occurrences);
+        }
+
+        var corpusWide = task.Intent == QueryIntent.CorpusWide;
+
+        var chunks = corpusWide
+            ? await semanticSearch.SearchPerDocumentAsync(task.Query, perDocTopK: 3, cancellationToken)
+            : await hybridSearch.SearchAsync(task.Query, topK: settings.TopK, cancellationToken: cancellationToken);
+
+        return BuildAugmentedPrompt(settings.Prompt, chunks, corpusWide);
+    }
+
+    private async Task<string> BuildCompoundAsync(
+        Settings settings,
+        IReadOnlyList<QueryTask> tasks,
+        CancellationToken cancellationToken)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("The following context sections are provided, one per part of the prompt:");
+        sb.AppendLine();
+        for (var i = 0; i < tasks.Count; i++)
+        {
+            var section = await subTaskExecutor.ExecuteAsync(tasks[i], settings.TopK, cancellationToken);
+            var label = tasks[i].Intent switch
+            {
+                QueryIntent.ExactTerm => "exact occurrence counts — authoritative",
+                QueryIntent.CorpusWide => "excerpts from every indexed document",
+                _ => "document excerpts",
+            };
+            sb.AppendLine($"## Part {i + 1}: {section.Task.Question} ({label})");
+            sb.AppendLine();
+            sb.AppendLine(section.Context.TrimEnd());
+            sb.AppendLine();
+        }
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(settings.Prompt);
+        return sb.ToString();
     }
 
     private static string BuildTermPrompt(string originalPrompt, string term, IReadOnlyList<TermDocumentOccurrences> occurrences)

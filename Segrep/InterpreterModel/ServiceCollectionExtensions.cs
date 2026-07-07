@@ -18,6 +18,8 @@ public static class ServiceCollectionExtensions
             return client.GetChatClient(options.ChatDeploymentName).AsIChatClient();
         });
 
+        services.AddSingleton<SubTaskExecutor>();
+
         return services;
     }
 }

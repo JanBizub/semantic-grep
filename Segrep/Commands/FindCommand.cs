@@ -11,11 +11,15 @@ public sealed class FindCommand(TermSearch termSearch) : AsyncCommand<FindComman
         [CommandArgument(0, "<term>")]
         [System.ComponentModel.Description("The exact word or phrase to count (case-insensitive, whole-word match).")]
         public string Term { get; init; } = string.Empty;
+
+        [CommandOption("--doc <NAME>")]
+        [System.ComponentModel.Description("Only search documents whose file name contains this text.")]
+        public string? Document { get; init; }
     }
 
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        var results = await termSearch.FindAsync(settings.Term, cancellationToken);
+        var results = await termSearch.FindAsync(settings.Term, settings.Document, cancellationToken);
         RenderOccurrences(settings.Term, results);
         return 0;
     }

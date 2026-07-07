@@ -33,7 +33,10 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
     // detects duplicated overlap text between adjacent chunks in the fallback path.
     private const int MaxChunkOverlap = 400;
 
-    public async Task<IReadOnlyList<TermDocumentOccurrences>> FindAsync(string term, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TermDocumentOccurrences>> FindAsync(
+        string term,
+        string? documentFilter = null,
+        CancellationToken cancellationToken = default)
     {
         term = term.Trim();
         if (term.Length == 0)
@@ -42,7 +45,7 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
         var regex = BuildTermRegex(term);
         var results = new List<TermDocumentOccurrences>();
 
-        foreach (var (filePath, fileHash) in await FindCandidateDocumentsAsync(term, cancellationToken))
+        foreach (var (filePath, fileHash) in await FindCandidateDocumentsAsync(term, documentFilter, cancellationToken))
         {
             var occurrences =
                 await CountFromCacheAsync(regex, filePath, fileHash, cancellationToken)
@@ -68,12 +71,14 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
     /// </summary>
     private async Task<IReadOnlyList<(string FilePath, string FileHash)>> FindCandidateDocumentsAsync(
         string term,
+        string? documentFilter,
         CancellationToken cancellationToken)
     {
         const string sql = """
             SELECT min(file_path), file_hash
             FROM ai_doc_chunk
             WHERE chunk_text ILIKE $1
+              AND ($2::text IS NULL OR file_name ILIKE '%' || $2 || '%')
             GROUP BY file_hash
             ORDER BY min(file_path)
             """;
@@ -87,6 +92,7 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.Parameters.AddWithValue(pattern);
+        command.Parameters.Add(new NpgsqlParameter<string?> { TypedValue = documentFilter });
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var candidates = new List<(string, string)>();
