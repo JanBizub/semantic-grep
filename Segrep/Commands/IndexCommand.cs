@@ -4,6 +4,7 @@ using Segrep.DocumentIntelligence;
 using Segrep.Embeddings;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console.Rendering;
 
 namespace Segrep.Commands;
 
@@ -56,8 +57,11 @@ public sealed class IndexCommand(
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var escListener = StartEscListener(cts);
-        if (escListener is not null)
-            AnsiConsole.MarkupLine("[grey]Press [bold]Esc[/] to cancel.[/]");
+
+        // The Esc hint is rendered as the last progress row; these wrappers blank
+        // out the bar/percentage/spinner columns for that row only.
+        var footerTaskId = -1;
+        ProgressColumn HideForFooter(ProgressColumn inner) => new FooterHiddenColumn(inner, () => footerTaskId);
 
         var cancelled = false;
         try
@@ -65,14 +69,21 @@ public sealed class IndexCommand(
             await AnsiConsole.Progress()
                 .Columns(
                     new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
+                    HideForFooter(new ProgressBarColumn()),
+                    HideForFooter(new PercentageColumn()),
+                    HideForFooter(new SpinnerColumn()))
                 .StartAsync(async ctx =>
                 {
                     var tasks = files.ToDictionary(
                         file => file,
                         file => ctx.AddTask(Markup.Escape(System.IO.Path.GetFileName(file)), maxValue: 100));
+
+                    ProgressTask? footer = null;
+                    if (escListener is not null)
+                    {
+                        footer = ctx.AddTask("[grey]Press [bold]Esc[/] to cancel.[/]");
+                        footerTaskId = footer.Id;
+                    }
 
                     try
                     {
@@ -100,7 +111,7 @@ public sealed class IndexCommand(
                                             break;
                                         case OutcomeKind.Unchanged:
                                             Interlocked.Increment(ref unchanged);
-                                            Finish(task, $"[grey]{name} (unchanged)[/]");
+                                            Finish(task, $"[grey]{name} (already in database — skipped)[/]");
                                             break;
                                         case OutcomeKind.Empty:
                                             Interlocked.Increment(ref skipped);
@@ -129,6 +140,11 @@ public sealed class IndexCommand(
                         if (!task.IsFinished)
                             Finish(task, $"[grey]{Markup.Escape(System.IO.Path.GetFileName(file))} (cancelled)[/]");
                     }
+
+                    // Spectre rejects null/whitespace descriptions, so blank the hint
+                    // row with markup that renders as nothing.
+                    if (footer is not null)
+                        Finish(footer, "[grey][/]");
                 });
 
             cancelled = cts.Token.IsCancellationRequested;
@@ -144,9 +160,12 @@ public sealed class IndexCommand(
         foreach (var message in messages)
             AnsiConsole.MarkupLine(message);
 
+        if (unchanged > 0)
+            AnsiConsole.MarkupLine($"[grey]{unchanged} file(s) skipped — content already in the database (use [bold]--force[/] to re-index).[/]");
+
         var summary =
             $"Processed [bold]{processed}[/] file(s), [bold]{totalChunks}[/] chunk(s). " +
-            $"Unchanged [bold]{unchanged}[/]. Skipped [bold]{skipped}[/].";
+            $"Already in database [bold]{unchanged}[/]. Empty [bold]{skipped}[/].";
 
         if (cancelled)
         {
@@ -209,6 +228,14 @@ public sealed class IndexCommand(
         await pipeline.IngestAsync(chunks, ingestProgress, cancellationToken);
 
         return new Outcome(OutcomeKind.Processed, chunks.Count);
+    }
+
+    private sealed class FooterHiddenColumn(ProgressColumn inner, Func<int> footerTaskId) : ProgressColumn
+    {
+        protected override bool NoWrap => true;
+
+        public override IRenderable Render(RenderOptions options, ProgressTask task, TimeSpan deltaTime) =>
+            task.Id == footerTaskId() ? Text.Empty : inner.Render(options, task, deltaTime);
     }
 
     private static void Finish(ProgressTask task, string description)
