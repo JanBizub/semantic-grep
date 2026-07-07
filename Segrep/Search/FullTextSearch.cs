@@ -8,7 +8,8 @@ public sealed class FullTextSearch(NpgsqlDataSource dataSource)
     {
         const string sql = """
             SELECT id, file_path, file_hash, chunk_index, chunk_text,
-                   ts_rank(content_tsv, websearch_to_tsquery('english', $1))::double precision AS score
+                   ts_rank(content_tsv, websearch_to_tsquery('english', $1))::double precision AS score,
+                   page_start, page_end
             FROM ai_doc_chunk
             WHERE content_tsv @@ websearch_to_tsquery('english', $1)
             ORDER BY score DESC
@@ -31,7 +32,9 @@ public sealed class FullTextSearch(NpgsqlDataSource dataSource)
                 FileHash: reader.GetString(2),
                 ChunkIndex: reader.GetInt32(3),
                 ChunkText: reader.GetString(4),
-                Score: reader.GetDouble(5)
+                Score: reader.GetDouble(5),
+                PageStart: reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                PageEnd: reader.IsDBNull(7) ? null : reader.GetInt32(7)
             ));
         }
 

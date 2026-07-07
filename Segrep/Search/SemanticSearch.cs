@@ -19,7 +19,8 @@ public sealed class SemanticSearch(
 
         const string sql = """
             SELECT id, file_path, file_hash, chunk_index, chunk_text,
-                   (1 - (embedding <=> $1))::double precision AS score
+                   (1 - (embedding <=> $1))::double precision AS score,
+                   page_start, page_end
             FROM ai_doc_chunk
             WHERE model_name = $2 AND dim = $3
             ORDER BY embedding <=> $1
@@ -54,12 +55,13 @@ public sealed class SemanticSearch(
             WITH ranked AS (
                 SELECT id, file_path, file_hash, chunk_index, chunk_text,
                        (1 - (embedding <=> $1))::double precision AS score,
+                       page_start, page_end,
                        ROW_NUMBER() OVER (PARTITION BY file_name ORDER BY embedding <=> $1) AS sim_rank,
                        ROW_NUMBER() OVER (PARTITION BY file_name ORDER BY chunk_index)      AS pos_rank
                 FROM ai_doc_chunk
                 WHERE model_name = $2 AND dim = $3
             )
-            SELECT id, file_path, file_hash, chunk_index, chunk_text, score
+            SELECT id, file_path, file_hash, chunk_index, chunk_text, score, page_start, page_end
             FROM ranked
             WHERE pos_rank = 1 OR sim_rank <= $4
             ORDER BY file_path, chunk_index
@@ -94,7 +96,9 @@ public sealed class SemanticSearch(
                 FileHash: reader.GetString(2),
                 ChunkIndex: reader.GetInt32(3),
                 ChunkText: reader.GetString(4),
-                Score: reader.GetDouble(5)
+                Score: reader.GetDouble(5),
+                PageStart: reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                PageEnd: reader.IsDBNull(7) ? null : reader.GetInt32(7)
             ));
         }
 

@@ -25,17 +25,24 @@ public sealed class DocumentParser(DocumentIntelligenceClient client, IOptions<A
         var cachePath = options.Value.CachePath;
         Directory.CreateDirectory(cachePath);
         var cacheFile = Path.Combine(cachePath, $"{hash}.md");
+        var pagesFile = Path.Combine(cachePath, $"{hash}.pages.json");
 
         string markdown;
-        if (File.Exists(cacheFile))
+        PageMap? pages;
+        // Older cache entries have only the .md file; re-analyze those so page info is captured.
+        if (File.Exists(cacheFile) && File.Exists(pagesFile))
+        {
             markdown = await File.ReadAllTextAsync(cacheFile, cancellationToken);
+            pages = PageMap.FromJson(await File.ReadAllTextAsync(pagesFile, cancellationToken));
+        }
         else
         {
-            markdown = await AnalyzeAsync(fileBytes, cancellationToken);
+            (markdown, pages) = await AnalyzeAsync(fileBytes, cancellationToken);
             await File.WriteAllTextAsync(cacheFile, markdown, cancellationToken);
+            await File.WriteAllTextAsync(pagesFile, pages?.ToJson() ?? "[]", cancellationToken);
         }
 
-        return new ParsedDocument(markdown, hash);
+        return new ParsedDocument(markdown, hash, pages);
     }
 
     public static string ComputeHash(byte[] fileBytes)
@@ -44,7 +51,7 @@ public sealed class DocumentParser(DocumentIntelligenceClient client, IOptions<A
         return Convert.ToHexStringLower(hashBytes);
     }
 
-    private async Task<string> AnalyzeAsync(byte[] fileBytes, CancellationToken cancellationToken)
+    private async Task<(string Markdown, PageMap? Pages)> AnalyzeAsync(byte[] fileBytes, CancellationToken cancellationToken)
     {
         var analyzeOptions = new AnalyzeDocumentOptions("prebuilt-layout", BinaryData.FromBytes(fileBytes))
         {
@@ -55,6 +62,9 @@ public sealed class DocumentParser(DocumentIntelligenceClient client, IOptions<A
             analyzeOptions,
             cancellationToken
         );
-        return operation.Value.Content;
+        var result = operation.Value;
+        var spans = (result.Pages ?? [])
+            .SelectMany(page => page.Spans.Select(span => new PageSpan(page.PageNumber, span.Offset, span.Length)));
+        return (result.Content, PageMap.FromSpans(spans));
     }
 }

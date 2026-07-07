@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS ai_doc_chunk (
     model_name text NOT NULL,
     dim integer NOT NULL,
     embedding vector(1536) NOT NULL,
+    page_start integer,
+    page_end integer,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ai_doc_chunk_unique UNIQUE (file_path, file_hash, chunk_index, model_name)
 );
@@ -19,6 +21,9 @@ CREATE TABLE IF NOT EXISTS ai_doc_chunk (
 ALTER TABLE ai_doc_chunk
     ADD COLUMN IF NOT EXISTS file_name text
     GENERATED ALWAYS AS (substring(file_path from '([^/\\]+)$')) STORED;
+
+ALTER TABLE ai_doc_chunk ADD COLUMN IF NOT EXISTS page_start integer;
+ALTER TABLE ai_doc_chunk ADD COLUMN IF NOT EXISTS page_end integer;
 
 CREATE INDEX IF NOT EXISTS ai_doc_chunk_embedding_hnsw_idx
     ON ai_doc_chunk USING hnsw (embedding vector_cosine_ops);

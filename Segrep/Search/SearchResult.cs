@@ -6,5 +6,7 @@ public sealed record SearchResult(
     string FileHash,
     int ChunkIndex,
     string ChunkText,
-    double Score
+    double Score,
+    int? PageStart = null,
+    int? PageEnd = null
 );

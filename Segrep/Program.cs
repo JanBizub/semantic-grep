@@ -30,6 +30,7 @@ public static class Program
         services.AddSingleton<FullTextSearch>();
         services.AddSingleton<GrepSearch>();
         services.AddSingleton<HybridSearch>();
+        services.AddSingleton<TermSearch>();
         services.AddSingleton<MarkdownChunker>();
         services.AddSingleton<InterpreterService>();
 
@@ -46,6 +47,7 @@ public static class Program
             config.AddExample("index", "./docs");
             config.AddExample("ask", "\"What are the key risks mentioned in the reports?\"");
             config.AddExample("enrich", "\"Summarise the Q3 results\"", "--raw");
+            config.AddExample("find", "\"Keter\"");
             config.AddExample("configure");
             config.AddExample("status");
 
@@ -57,6 +59,9 @@ public static class Program
 
             config.AddCommand<AskCommand>("ask")
                 .WithDescription("Ask a question — returns a cited answer composed from indexed documents.");
+
+            config.AddCommand<FindCommand>("find")
+                .WithDescription("Count exact occurrences of a word or phrase across indexed documents, with page numbers.");
 
             config.AddCommand<ConfigureCommand>("configure")
                 .WithDescription("Interactively set Azure Document Intelligence, Azure OpenAI, and PostgreSQL credentials.");

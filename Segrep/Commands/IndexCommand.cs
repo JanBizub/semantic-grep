@@ -212,7 +212,7 @@ public sealed class IndexCommand(
 
         task.Value = ParsedValue;
         task.Description = $"{name} [grey]— chunking[/]";
-        var chunks = chunker.Chunk(file, parsed.Hash, parsed.Markdown);
+        var chunks = chunker.Chunk(file, parsed.Hash, parsed.Markdown, parsed.Pages);
 
         task.Value = ChunkedValue;
         if (chunks.Count == 0)

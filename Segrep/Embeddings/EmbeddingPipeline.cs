@@ -108,10 +108,14 @@ public sealed class EmbeddingPipeline(
         EmbeddingModelOptions opts,
         CancellationToken cancellationToken)
     {
+        // On conflict the content is identical (hash + index match); refresh the page
+        // attribution so --force re-indexing backfills pages on rows stored before
+        // page tracking existed.
         const string sql = """
-            INSERT INTO ai_doc_chunk (file_path, file_hash, chunk_index, chunk_text, content_tsv, model_name, dim, embedding)
-            VALUES ($1, $2, $3, $4, to_tsvector('english', $4), $5, $6, $7)
-            ON CONFLICT (file_path, file_hash, chunk_index, model_name) DO NOTHING
+            INSERT INTO ai_doc_chunk (file_path, file_hash, chunk_index, chunk_text, content_tsv, model_name, dim, embedding, page_start, page_end)
+            VALUES ($1, $2, $3, $4, to_tsvector('english', $4), $5, $6, $7, $8, $9)
+            ON CONFLICT (file_path, file_hash, chunk_index, model_name)
+            DO UPDATE SET page_start = EXCLUDED.page_start, page_end = EXCLUDED.page_end
             """;
 
         await using var cmd = connection.CreateCommand();
@@ -123,6 +127,8 @@ public sealed class EmbeddingPipeline(
         cmd.Parameters.AddWithValue(opts.ModelName);
         cmd.Parameters.AddWithValue(floatVector.Length);
         cmd.Parameters.AddWithValue(new Vector(floatVector));
+        cmd.Parameters.Add(new NpgsqlParameter<int?> { TypedValue = chunk.PageStart });
+        cmd.Parameters.Add(new NpgsqlParameter<int?> { TypedValue = chunk.PageEnd });
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 }

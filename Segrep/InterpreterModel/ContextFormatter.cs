@@ -36,8 +36,16 @@ public static class ContextFormatter
     private static void AppendChunk(StringBuilder sb, SearchResult chunk)
     {
         var fileName = Path.GetFileName(chunk.FilePath);
-        sb.AppendLine($"[source: {fileName} #{chunk.ChunkIndex}]");
+        sb.AppendLine($"[source: {fileName} #{chunk.ChunkIndex}{FormatPages(chunk)}]");
         sb.AppendLine(chunk.ChunkText);
         sb.AppendLine();
+    }
+
+    private static string FormatPages(SearchResult chunk)
+    {
+        if (chunk.PageStart is not int start)
+            return string.Empty;
+        var end = chunk.PageEnd ?? start;
+        return end == start ? $", p. {start}" : $", pp. {start}-{end}";
     }
 }

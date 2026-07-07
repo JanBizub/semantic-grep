@@ -1,3 +1,3 @@
 namespace Segrep.DocumentIntelligence;
 
-public sealed record ParsedDocument(string Markdown, string Hash);
+public sealed record ParsedDocument(string Markdown, string Hash, PageMap? Pages);

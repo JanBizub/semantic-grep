@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Segrep.DocumentIntelligence;
 
 namespace Segrep.Chunking;
 
@@ -9,92 +10,137 @@ public sealed class MarkdownChunker
     private const int OverlapChars = 400;    // ~100 tokens × 4 chars/token
 
     private static readonly Regex HeadingPattern = new(@"^#{1,6}\s", RegexOptions.Compiled | RegexOptions.Multiline);
+    private static readonly Regex BlankLinePattern = new(@"\n{2,}", RegexOptions.Compiled);
 
-    public IReadOnlyList<Chunk> Chunk(string filePath, string fileHash, string markdown)
+    // Start/End are character offsets into the original markdown, so chunks can be
+    // attributed to source pages via PageMap even though the window text itself is
+    // rebuilt with normalized separators.
+    private readonly record struct Block(string Text, int Start, int End);
+    private readonly record struct Window(string Text, int Start, int End);
+
+    public IReadOnlyList<Chunk> Chunk(string filePath, string fileHash, string markdown, PageMap? pages = null)
     {
         var blocks = SplitIntoBlocks(markdown);
         var windows = BuildWindows(blocks);
         return windows
-            .Select((text, index) => new Chunk(filePath, fileHash, index, text.Trim()))
+            .Select((window, index) =>
+            {
+                int? pageStart = null, pageEnd = null;
+                if (pages is not null)
+                    (pageStart, pageEnd) = pages.GetPageRange(window.Start, window.End);
+                return new Chunk(filePath, fileHash, index, window.Text.Trim(), pageStart, pageEnd);
+            })
             .Where(c => c.Text.Length > 0)
             .ToList();
     }
 
-    private static List<string> SplitIntoBlocks(string markdown)
+    private static List<Block> SplitIntoBlocks(string markdown)
     {
         // Split at blank lines, keeping heading lines as their own block boundaries.
-        var rawBlocks = Regex.Split(markdown, @"\n{2,}");
-        var blocks = new List<string>();
+        var blocks = new List<Block>();
 
-        foreach (var block in rawBlocks)
+        void AddTrimmed(int start, int end)
         {
-            var trimmed = block.Trim();
-            if (trimmed.Length == 0)
-                continue;
+            TrimRange(markdown, ref start, ref end);
+            if (start < end)
+                blocks.Add(new Block(markdown[start..end], start, end));
+        }
+
+        void AddRaw(int start, int end)
+        {
+            TrimRange(markdown, ref start, ref end);
+            if (start >= end)
+                return;
+
+            var text = markdown[start..end];
 
             // If the block itself contains multiple headings, split further.
-            if (HeadingPattern.Matches(trimmed).Count > 1)
+            var headings = HeadingPattern.Matches(text);
+            if (headings.Count > 1)
             {
-                var subBlocks = Regex.Split(trimmed, @"(?=^#{1,6}\s)", RegexOptions.Multiline);
-                foreach (var sub in subBlocks)
+                var subStart = 0;
+                foreach (var boundary in headings.Select(m => m.Index).Where(i => i > 0))
                 {
-                    var s = sub.Trim();
-                    if (s.Length > 0)
-                        blocks.Add(s);
+                    AddTrimmed(start + subStart, start + boundary);
+                    subStart = boundary;
                 }
+                AddTrimmed(start + subStart, end);
             }
             else
             {
-                blocks.Add(trimmed);
+                blocks.Add(new Block(text, start, end));
             }
         }
+
+        var position = 0;
+        foreach (Match separator in BlankLinePattern.Matches(markdown))
+        {
+            AddRaw(position, separator.Index);
+            position = separator.Index + separator.Length;
+        }
+        AddRaw(position, markdown.Length);
 
         return blocks;
     }
 
-    private static List<string> BuildWindows(List<string> blocks)
+    private static void TrimRange(string text, ref int start, ref int end)
     {
-        var chunks = new List<string>();
+        while (start < end && char.IsWhiteSpace(text[start]))
+            start++;
+        while (end > start && char.IsWhiteSpace(text[end - 1]))
+            end--;
+    }
+
+    private static List<Window> BuildWindows(List<Block> blocks)
+    {
+        const int Unset = -1;
+        var windows = new List<Window>();
         var buffer = new StringBuilder();
-        string? overlap = null;
+        var start = Unset;  // original-markdown offset where the current window begins
+        var end = 0;        // original-markdown offset where the current window ends
+
+        void Flush()
+        {
+            var text = buffer.ToString();
+            windows.Add(new Window(text, Math.Max(start, 0), end));
+            buffer.Clear();
+            var overlap = TailChars(text, OverlapChars);
+            if (overlap != null)
+            {
+                buffer.Append(overlap);
+                buffer.Append("\n\n");
+                // The overlap repeats the tail of the flushed window, so the next
+                // window starts (approximately) that many characters before its end.
+                start = Math.Max(Math.Max(start, 0), end - overlap.Length);
+            }
+            else
+            {
+                start = Unset;
+            }
+        }
 
         foreach (var block in blocks)
         {
             // If adding this block would exceed target and we already have content, flush.
-            if (buffer.Length > 0 && buffer.Length + block.Length + 2 > TargetChars)
-            {
-                chunks.Add(buffer.ToString());
-                overlap = TailChars(buffer.ToString(), OverlapChars);
-                buffer.Clear();
-                if (overlap != null)
-                {
-                    buffer.Append(overlap);
-                    buffer.Append("\n\n");
-                }
-            }
+            if (buffer.Length > 0 && buffer.Length + block.Text.Length + 2 > TargetChars)
+                Flush();
 
             if (buffer.Length > 0)
                 buffer.Append("\n\n");
-            buffer.Append(block);
+            if (start == Unset)
+                start = block.Start;
+            buffer.Append(block.Text);
+            end = block.End;
 
             // If a single block already exceeds the target, flush it immediately.
             if (buffer.Length >= TargetChars)
-            {
-                chunks.Add(buffer.ToString());
-                overlap = TailChars(buffer.ToString(), OverlapChars);
-                buffer.Clear();
-                if (overlap != null)
-                {
-                    buffer.Append(overlap);
-                    buffer.Append("\n\n");
-                }
-            }
+                Flush();
         }
 
         if (buffer.Length > 0)
-            chunks.Add(buffer.ToString());
+            windows.Add(new Window(buffer.ToString(), Math.Max(start, 0), end));
 
-        return chunks;
+        return windows;
     }
 
     // Returns the last `chars` characters of `text` trimmed to a word boundary.

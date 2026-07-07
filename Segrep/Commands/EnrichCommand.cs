@@ -4,7 +4,11 @@ using Spectre.Console.Cli;
 
 namespace Segrep.Commands;
 
-public sealed class EnrichCommand(HybridSearch hybridSearch, SemanticSearch semanticSearch, InterpreterService interpreter)
+public sealed class EnrichCommand(
+    HybridSearch hybridSearch,
+    SemanticSearch semanticSearch,
+    TermSearch termSearch,
+    InterpreterService interpreter)
     : AsyncCommand<EnrichCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -27,6 +31,13 @@ public sealed class EnrichCommand(HybridSearch hybridSearch, SemanticSearch sema
         var interpretation = settings.Raw
             ? new PromptInterpretation(QueryIntent.Focused, settings.Prompt)
             : await interpreter.InterpretPromptAsync(settings.Prompt, cancellationToken);
+        if (interpretation.Intent == QueryIntent.ExactTerm)
+        {
+            var occurrences = await termSearch.FindAsync(interpretation.ExpandedQuery, cancellationToken);
+            Console.Write(BuildTermPrompt(settings.Prompt, interpretation.ExpandedQuery, occurrences));
+            return 0;
+        }
+
         var corpusWide = interpretation.Intent == QueryIntent.CorpusWide;
 
         var chunks = corpusWide
@@ -36,6 +47,18 @@ public sealed class EnrichCommand(HybridSearch hybridSearch, SemanticSearch sema
         // Emit an augmented prompt to stdout, ready to pipe into another LLM call.
         Console.Write(BuildAugmentedPrompt(settings.Prompt, chunks, corpusWide));
         return 0;
+    }
+
+    private static string BuildTermPrompt(string originalPrompt, string term, IReadOnlyList<TermDocumentOccurrences> occurrences)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("The following exact-occurrence counts are provided as context:");
+        sb.AppendLine();
+        sb.AppendLine(TermOccurrenceFormatter.BuildSummary(term, occurrences));
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.Append(originalPrompt);
+        return sb.ToString();
     }
 
     private static string BuildAugmentedPrompt(string originalPrompt, IReadOnlyList<SearchResult> chunks, bool corpusWide)

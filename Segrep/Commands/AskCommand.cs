@@ -5,7 +5,11 @@ using Spectre.Console.Cli;
 
 namespace Segrep.Commands;
 
-public sealed class AskCommand(HybridSearch hybridSearch, SemanticSearch semanticSearch, InterpreterService interpreter)
+public sealed class AskCommand(
+    HybridSearch hybridSearch,
+    SemanticSearch semanticSearch,
+    TermSearch termSearch,
+    InterpreterService interpreter)
     : AsyncCommand<AskCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -22,6 +26,16 @@ public sealed class AskCommand(HybridSearch hybridSearch, SemanticSearch semanti
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var interpretation = await interpreter.InterpretPromptAsync(settings.Prompt, cancellationToken);
+
+        if (interpretation.Intent == QueryIntent.ExactTerm)
+        {
+            AnsiConsole.MarkupLine(
+                $"[grey]exact-term search — counting literal occurrences of \"{Markup.Escape(interpretation.ExpandedQuery)}\"[/]");
+            var occurrences = await termSearch.FindAsync(interpretation.ExpandedQuery, cancellationToken);
+            FindCommand.RenderOccurrences(interpretation.ExpandedQuery, occurrences);
+            return 0;
+        }
+
         var corpusWide = interpretation.Intent == QueryIntent.CorpusWide;
 
         if (corpusWide)
