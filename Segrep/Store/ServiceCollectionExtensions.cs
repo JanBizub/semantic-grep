@@ -15,6 +15,8 @@ public static class ServiceCollectionExtensions
             return SegrepDataSource.Create(options);
         });
 
+        services.AddSingleton<DocumentStore>();
+
         return services;
     }
 }

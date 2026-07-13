@@ -5,6 +5,7 @@ using Segrep.Chunking;
 using Segrep.Commands;
 using Segrep.Configuration;
 using Segrep.DocumentIntelligence;
+using Segrep.Documents;
 using Segrep.Embeddings;
 using Segrep.Infrastructure;
 using Segrep.InterpreterModel;
@@ -25,6 +26,7 @@ public static class Program
         services.AddAppConfiguration(configuration);
         services.AddPostgresStore();
         services.AddAzureDocumentIntelligence();
+        services.AddDocuments();
         services.AddEmbeddingModel();
         services.AddInterpreterModel();
         services.AddSingleton<SemanticSearch>();
@@ -80,6 +82,23 @@ public static class Program
 
             config.AddCommand<UpdateCommand>("update")
                 .WithDescription("Download and install the latest segrep release.");
+
+            config.AddBranch("document", doc =>
+            {
+                doc.SetDescription("Manage structured markdown documents stored as heading trees.");
+
+                doc.AddCommand<DocumentAddCommand>("add")
+                    .WithDescription("Validate and store a structured markdown document, replacing any same-name document.");
+
+                doc.AddCommand<DocumentListCommand>("list")
+                    .WithDescription("Show all stored structured documents.");
+
+                doc.AddCommand<DocumentRemoveCommand>("remove")
+                    .WithDescription("Delete one stored document by id.");
+
+                doc.AddCommand<DocumentClearCommand>("clear")
+                    .WithDescription("Delete all stored structured documents.");
+            });
         });
 
         return app.Run(args);
