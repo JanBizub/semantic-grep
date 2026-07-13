@@ -83,7 +83,13 @@ dotnet run --project Segrep -- document list            # show stored structured
 
 `segrep` needs three external services configured (see **Configuration** below): Azure Document Intelligence, Azure OpenAI (chat + embeddings), and a PostgreSQL instance with the `vector` and `pg_trgm` extensions. Run `configure` first, then `status` to confirm connectivity. On startup `Program.cs` applies the DB schema via `SchemaMigrator` when a Postgres connection string is present (warns, doesn't fail, if the DB is unreachable).
 
-There is no test project yet; no test runner is configured. The solution is a single project, `Segrep/Segrep.csproj`.
+The solution has two projects: `Segrep/Segrep.csproj` (the CLI) and `Segrep.Tests/Segrep.Tests.csproj` (xUnit unit tests).
+
+```bash
+dotnet test                                             # run the unit test suite
+```
+
+Tests cover the pure/mockable units — `MarkdownChunker`, `PageMap`, `MarkdownDocumentParser`, `InterpreterService` (via a fake `IChatClient`), `ContextFormatter`, `TermOccurrenceFormatter`, RRF fusion + per-document capping in `HybridSearch`, the `TermSearch` regex/overlap helpers, and `SelfUpdater` checksum/tag parsing. A few pure static helpers are `internal` (exposed via `InternalsVisibleTo` to `Segrep.Tests`) rather than `private` for this reason. DB-bound code (`Store/`, the SQL search legs) has no coverage; that needs integration tests against a real Postgres (tracked as `semantic-grep-ff9`).
 
 ## CLI commands
 

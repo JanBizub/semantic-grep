@@ -28,7 +28,7 @@ public sealed class HybridSearch(SemanticSearch semantic, FullTextSearch fullTex
     // Keeps one document from monopolizing all top-k slots when several documents are
     // relevant; skipped chunks are backfilled in fused order so single-document
     // questions still fill top-k.
-    private static List<SearchResult> CapPerDocument(List<SearchResult> ordered, int topK, int maxPerDocument)
+    internal static List<SearchResult> CapPerDocument(List<SearchResult> ordered, int topK, int maxPerDocument)
     {
         var counts = new Dictionary<string, int>();
         var taken = new List<SearchResult>(topK);
@@ -58,7 +58,7 @@ public sealed class HybridSearch(SemanticSearch semantic, FullTextSearch fullTex
         return taken;
     }
 
-    private static IEnumerable<SearchResult> Fuse(
+    internal static IEnumerable<SearchResult> Fuse(
         IReadOnlyList<SearchResult> semanticResults,
         IReadOnlyList<SearchResult> ftsResults,
         IReadOnlyList<SearchResult> grepResults)

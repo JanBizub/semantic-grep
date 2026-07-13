@@ -153,7 +153,7 @@ public sealed class SelfUpdater(GitHubReleaseClient releaseClient)
     }
 
     /// <summary>Finds the hex digest for <paramref name="assetName"/> in a <c>sha256sum</c>-format file.</summary>
-    private static string? FindChecksum(string checksums, string assetName)
+    internal static string? FindChecksum(string checksums, string assetName)
     {
         foreach (var line in checksums.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
@@ -188,10 +188,10 @@ public sealed class SelfUpdater(GitHubReleaseClient releaseClient)
         }
     }
 
-    private static Version? ParseTag(string tag) =>
+    internal static Version? ParseTag(string tag) =>
         Version.TryParse(TrimTag(tag), out var version) ? version : null;
 
-    private static string TrimTag(string tag) =>
+    internal static string TrimTag(string tag) =>
         tag.StartsWith('v') ? tag[1..] : tag;
 }
 

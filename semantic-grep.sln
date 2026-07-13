@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Segrep", "Segrep\Segrep.csproj", "{3FC083AE-B316-4835-AD17-F6F1CA75B6F4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Segrep.Tests", "Segrep.Tests\Segrep.Tests.csproj", "{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,18 @@ Global
 		{3FC083AE-B316-4835-AD17-F6F1CA75B6F4}.Release|x64.Build.0 = Release|Any CPU
 		{3FC083AE-B316-4835-AD17-F6F1CA75B6F4}.Release|x86.ActiveCfg = Release|Any CPU
 		{3FC083AE-B316-4835-AD17-F6F1CA75B6F4}.Release|x86.Build.0 = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|x64.Build.0 = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Debug|x86.Build.0 = Debug|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|Any CPU.Build.0 = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|x64.ActiveCfg = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|x64.Build.0 = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|x86.ActiveCfg = Release|Any CPU
+		{34A8DDA8-F523-4BE3-B0E6-7A88F3D75456}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

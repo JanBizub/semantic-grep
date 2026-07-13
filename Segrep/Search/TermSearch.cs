@@ -60,7 +60,7 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
 
     // Literal match at word boundaries; lookarounds instead of \b so terms that start or
     // end with non-word characters (e.g. "C#") still match.
-    private static Regex BuildTermRegex(string term) =>
+    internal static Regex BuildTermRegex(string term) =>
         new($@"(?<!\w){Regex.Escape(term)}(?!\w)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
@@ -194,7 +194,7 @@ public sealed class TermSearch(NpgsqlDataSource dataSource, IOptions<AzureDocume
 
     // Length of the longest suffix of `previous` that is a prefix of `current`,
     // bounded by the chunker's overlap size — the text duplicated between the two.
-    private static int SharedOverlapLength(string previous, string current)
+    internal static int SharedOverlapLength(string previous, string current)
     {
         var max = Math.Min(MaxChunkOverlap, Math.Min(previous.Length, current.Length));
         for (var length = max; length > 0; length--)
