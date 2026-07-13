@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>2b2c3c3a-9e3a-4d77-9f1a-3a7e9a2c6a3a</UserSecretsId>
+    <!-- Dev floor: release builds override this via -p:Version=<tag> so any real
+         release always compares as newer than a local build (see segrep update). -->
+    <Version>0.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

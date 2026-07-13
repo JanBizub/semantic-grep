@@ -10,6 +10,7 @@ using Segrep.Infrastructure;
 using Segrep.InterpreterModel;
 using Segrep.Search;
 using Segrep.Store;
+using Segrep.Update;
 using Spectre.Console.Cli;
 
 namespace Segrep;
@@ -33,6 +34,7 @@ public static class Program
         services.AddSingleton<TermSearch>();
         services.AddSingleton<MarkdownChunker>();
         services.AddSingleton<InterpreterService>();
+        services.AddSelfUpdate();
 
         using var provider = services.BuildServiceProvider();
         EnsureStoreSchema(provider, configuration);
@@ -42,7 +44,7 @@ public static class Program
         app.Configure(config =>
         {
             config.SetApplicationName("segrep");
-            config.SetApplicationVersion("0.1.0");
+            config.SetApplicationVersion(VersionInfo.Current);
 
             config.AddExample("index", "./docs");
             config.AddExample("ask", "\"What are the key risks mentioned in the reports?\"");
@@ -50,6 +52,7 @@ public static class Program
             config.AddExample("find", "\"Keter\"");
             config.AddExample("configure");
             config.AddExample("status");
+            config.AddExample("update", "--check");
 
             config.AddCommand<IndexCommand>("index")
                 .WithDescription("Parse, chunk, embed, and store documents from a folder or file.");
@@ -74,6 +77,9 @@ public static class Program
 
             config.AddCommand<ListCommand>("list")
                 .WithDescription("Show all indexed documents.");
+
+            config.AddCommand<UpdateCommand>("update")
+                .WithDescription("Download and install the latest segrep release.");
         });
 
         return app.Run(args);

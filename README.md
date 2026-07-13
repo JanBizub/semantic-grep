@@ -54,6 +54,13 @@ dotnet run --project Segrep -- index ./docs
 dotnet run --project Segrep -- ask "What are the key risks in the reports?"
 ```
 
+Installed from a release (see `install.sh`), `segrep` can update itself in place:
+
+```bash
+segrep update --check   # report whether a newer release exists
+segrep update           # download, verify (SHA-256), and self-replace
+```
+
 ## Libraries
 
 - [Spectre.Console](https://spectreconsole.net) — CLI rendering and command routing

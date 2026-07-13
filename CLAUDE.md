@@ -76,6 +76,7 @@ dotnet run --project Segrep -- enrich "Summarise Q3 results" --raw
 dotnet run --project Segrep -- find "Keter"             # exact occurrences + page numbers
 dotnet run --project Segrep -- list                     # show indexed documents
 dotnet run --project Segrep -- clear                    # delete all indexed chunks
+dotnet run --project Segrep -- update --check           # check for / install a newer release
 ```
 
 `segrep` needs three external services configured (see **Configuration** below): Azure Document Intelligence, Azure OpenAI (chat + embeddings), and a PostgreSQL instance with the `vector` and `pg_trgm` extensions. Run `configure` first, then `status` to confirm connectivity. On startup `Program.cs` applies the DB schema via `SchemaMigrator` when a Postgres connection string is present (warns, doesn't fail, if the DB is unreachable).
@@ -94,6 +95,7 @@ Registered in `Segrep/Program.cs`; implemented under `Segrep/Commands/`:
 - `status` — check connectivity to all configured services.
 - `list` — show all indexed documents.
 - `clear` — delete all indexed chunks from the database.
+- `update [--check] [--force]` — self-update: compare the running version against the latest GitHub Release, download the matching self-contained binary for this OS/arch, verify its SHA-256 against the release's `SHA256SUMS`, and overwrite the running executable in place (Unix only). `--check` reports availability without installing; `--force` reinstalls even when current.
 
 ## Architecture
 

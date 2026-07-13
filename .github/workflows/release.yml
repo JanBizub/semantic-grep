@@ -34,6 +34,7 @@ jobs:
 
       - name: Publish
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           dotnet publish Segrep/Segrep.csproj \
             -c Release \
             -r ${{ matrix.rid }} \
@@ -41,6 +42,7 @@ jobs:
             -p:PublishSingleFile=true \
             -p:DebugType=none \
             -p:DebugSymbols=false \
+            -p:Version="$VERSION" \
             -o ./dist
 
       - name: Rename binary
@@ -66,8 +68,13 @@ jobs:
       - name: Make binaries executable
         run: chmod +x segrep-*
 
+      - name: Generate checksums
+        run: sha256sum segrep-* > SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: segrep-*
+          files: |
+            segrep-*
+            SHA256SUMS
           generate_release_notes: true
