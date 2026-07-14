@@ -41,6 +41,7 @@ flowchart LR
 | **Azure Document Intelligence** | Parse unstructured documents into Markdown |
 | **Azure OpenAI** (embeddings) | Embed chunks for vector search |
 | **Azure OpenAI** (chat) | Expand queries and compose cited answers |
+| **Azure OpenAI** (vision, optional) | Describe figures/images during `index --describe-images` |
 | **PostgreSQL** (+ `pgvector`, `pg_trgm`) | Store and search chunks |
 
 > Standard pricing tier required for Azure Document Intelligence files > 4 MB.
@@ -51,6 +52,7 @@ flowchart LR
 dotnet run --project Segrep -- configure   # set credentials interactively
 dotnet run --project Segrep -- status      # verify service connectivity
 dotnet run --project Segrep -- index ./docs
+dotnet run --project Segrep -- index ./docs --describe-images   # also caption figures with the vision model
 dotnet run --project Segrep -- ask "What are the key risks in the reports?"
 ```
 

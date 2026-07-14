@@ -1,5 +1,6 @@
 using Azure;
 using Azure.AI.DocumentIntelligence;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Segrep.Configuration;
@@ -17,6 +18,10 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddSingleton<DocumentParser>();
+
+        services.AddSingleton(provider => new FigureCaptioner(
+            provider.GetRequiredKeyedService<IChatClient>(InterpreterModel.ServiceCollectionExtensions.VisionChatClientKey),
+            provider.GetRequiredService<IOptions<AzureDocumentIntelligenceOptions>>()));
 
         return services;
     }

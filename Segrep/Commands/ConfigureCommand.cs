@@ -105,6 +105,7 @@ public sealed class ConfigureCommand(
         AddIfChanged(values, "ApiKey", PromptValue("API key", current.ApiKey, secret: true));
         AddIfChanged(values, "EmbeddingDeploymentName", PromptValue("Embedding deployment name", current.EmbeddingDeploymentName, secret: false));
         AddIfChanged(values, "ChatDeploymentName", PromptValue("Chat deployment name", current.ChatDeploymentName, secret: false));
+        AddIfChanged(values, "VisionDeploymentName", PromptValue("Vision deployment name (blank = use chat deployment)", current.VisionDeploymentName, secret: false));
 
         if (values.Count > 0)
         {

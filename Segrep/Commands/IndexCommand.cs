@@ -11,6 +11,7 @@ namespace Segrep.Commands;
 public sealed class IndexCommand(
     DocumentParser parser,
     MarkdownChunker chunker,
+    FigureCaptioner captioner,
     EmbeddingPipeline pipeline) : AsyncCommand<IndexCommand.Settings>
 {
     public sealed class Settings : CommandSettings
@@ -26,6 +27,10 @@ public sealed class IndexCommand(
         [CommandOption("--parallel <N>")]
         [System.ComponentModel.Description("How many files to ingest concurrently.")]
         public int Parallelism { get; init; } = 4;
+
+        [CommandOption("--describe-images")]
+        [System.ComponentModel.Description("Describe figures/images with the vision model and index the descriptions (one LLM call per figure).")]
+        public bool DescribeImages { get; init; }
 
         public override ValidationResult Validate() =>
             Parallelism < 1
@@ -101,7 +106,7 @@ public sealed class IndexCommand(
 
                                 try
                                 {
-                                    var outcome = await IndexFileAsync(file, task, name, settings.Force, messages, ct);
+                                    var outcome = await IndexFileAsync(file, task, name, settings.Force, settings.DescribeImages, messages, ct);
                                     switch (outcome.Kind)
                                     {
                                         case OutcomeKind.Processed:
@@ -186,6 +191,7 @@ public sealed class IndexCommand(
         ProgressTask task,
         string name,
         bool force,
+        bool describeImages,
         ConcurrentQueue<string> messages,
         CancellationToken cancellationToken)
     {
@@ -208,11 +214,22 @@ public sealed class IndexCommand(
 
         task.Value = HashCheckedValue;
         task.Description = $"{name} [grey]— parsing[/]";
-        var parsed = await parser.ParseAsync(file, cancellationToken);
+        var parsed = await parser.ParseAsync(file, requireFigures: describeImages, cancellationToken);
+        var markdown = parsed.Markdown;
+        var pages = parsed.Pages;
 
         task.Value = ParsedValue;
+        if (describeImages)
+        {
+            task.Description = $"{name} [grey]— describing images[/]";
+            var described = await captioner.CaptionAsync(file, parsed, cancellationToken);
+            foreach (var warning in described.Warnings)
+                messages.Enqueue($"[yellow]Warning:[/] {Markup.Escape(warning)}");
+            (markdown, pages) = FigureCaptionInjector.Inject(markdown, pages, described.Captions);
+        }
+
         task.Description = $"{name} [grey]— chunking[/]";
-        var chunks = chunker.Chunk(file, parsed.Hash, parsed.Markdown, parsed.Pages);
+        var chunks = chunker.Chunk(file, parsed.Hash, markdown, pages);
 
         task.Value = ChunkedValue;
         if (chunks.Count == 0)

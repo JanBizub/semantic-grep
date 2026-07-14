@@ -12,6 +12,12 @@ public sealed class AzureOpenAIOptions
 
     public string ChatDeploymentName { get; set; } = string.Empty;
 
+    /// <summary>Deployment used to describe figures/images; blank falls back to the chat deployment.</summary>
+    public string VisionDeploymentName { get; set; } = string.Empty;
+
+    public string EffectiveVisionDeploymentName =>
+        string.IsNullOrWhiteSpace(VisionDeploymentName) ? ChatDeploymentName : VisionDeploymentName;
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Endpoint) && !string.IsNullOrWhiteSpace(ApiKey);
 
     // Returns scheme://host[:port]/ — drops any request path (e.g. the "/openai/v1/responses"
