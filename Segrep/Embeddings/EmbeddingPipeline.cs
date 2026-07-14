@@ -75,26 +75,34 @@ public sealed class EmbeddingPipeline(
             var fileHash = items[0].chunk.FileHash;
 
             await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
             // Remove records for this file that belong to a different (older) content hash.
-            await DeleteStaleAsync(connection, filePath, fileHash, cancellationToken);
+            await DeleteStaleAsync(connection, transaction, filePath, fileHash, cancellationToken);
 
             foreach (var (chunk, embedding) in items)
             {
-                await UpsertChunkAsync(connection, chunk, embedding.Vector.ToArray(), opts, cancellationToken);
+                await UpsertChunkAsync(connection, transaction, chunk, embedding.Vector.ToArray(), opts, cancellationToken);
                 upserted++;
                 progress?.Report(0.5 + 0.5 * upserted / chunks.Count);
             }
+
+            // Commit only after every chunk for this file lands, so cancellation mid-loop
+            // rolls back instead of leaving a partial chunk set that IsUpToDateAsync would
+            // later mistake for a complete, already-indexed file.
+            await transaction.CommitAsync(cancellationToken);
         }
     }
 
     private static async Task DeleteStaleAsync(
         NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
         string filePath,
         string currentHash,
         CancellationToken cancellationToken)
     {
         await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText = "DELETE FROM ai_doc_chunk WHERE file_path = $1 AND file_hash <> $2";
         cmd.Parameters.AddWithValue(filePath);
         cmd.Parameters.AddWithValue(currentHash);
@@ -103,6 +111,7 @@ public sealed class EmbeddingPipeline(
 
     private static async Task UpsertChunkAsync(
         NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
         Chunk chunk,
         float[] floatVector,
         EmbeddingModelOptions opts,
@@ -119,6 +128,7 @@ public sealed class EmbeddingPipeline(
             """;
 
         await using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText = sql;
         cmd.Parameters.AddWithValue(chunk.FilePath);
         cmd.Parameters.AddWithValue(chunk.FileHash);
