@@ -44,7 +44,10 @@ flowchart LR
 | **Azure OpenAI** (vision, optional) | Describe figures/images during `index --describe-images` |
 | **PostgreSQL** (+ `pgvector`, `pg_trgm`) | Store and search chunks |
 
-> Standard pricing tier required for Azure Document Intelligence files > 4 MB.
+> Standard pricing tier required for Azure Document Intelligence files > 4 MB
+
+Localhost connection string: :-)
+> Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=postgres
 
 ## Quick Start
 
